@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simple Contacts</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  h1 { margin: 0 0 16px; }
+  form, table { width: 100%; max-width: 700px; }
+  .row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; margin: 8px 0; }
+  input { padding: 8px; }
+  button { padding: 8px 12px; margin-right: 6px; }
+  table { border-collapse: collapse; margin-top: 16px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  .actions { white-space: nowrap; }
+  .muted { color: #666; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>Simple Contacts</h1>
+
+  <form id="add-form">
+    <div class="row">
+      <label for="name">Name</label>
+      <input id="name" required placeholder="Jane Doe" />
+    </div>
+    <div class="row">
+      <label for="phone">Phone</label>
+      <input id="phone" placeholder="+1 555 123 4567" />
+    </div>
+    <div class="row">
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="jane@example.com" />
+    </div>
+    <button type="submit">Add</button>
+    <button type="reset">Clear</button>
+  </form>
+
+  <div style="margin-top:12px;">
+    <input id="search" placeholder="Search..." style="max-width: 300px; padding:8px;" />
+    <button id="clear-all" style="float:right;">Clear All</button>
+  </div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>Name</th><th>Phone</th><th>Email</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <p id="empty" class="muted">No contacts yet.</p>
+
+<script>
+(function(){
+  const KEY = 'simple-contacts';
+  let contacts = [];
+
+  // Elements
+  const form = document.getElementById('add-form');
+  const nameEl = document.getElementById('name');
+  const phoneEl = document.getElementById('phone');
+  const emailEl = document.getElementById('email');
+  const searchEl = document.getElementById('search');
+  const clearAllBtn = document.getElementById('clear-all');
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+
+  // Helpers
+  const uid = () => String(Date.now() + Math.random());
+  const save = () => localStorage.setItem(KEY, JSON.stringify(contacts));
+  const load = () => {
+    try {
+      const raw = localStorage.getItem(KEY);
+      contacts = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+    } catch { contacts = []; }
+  };
+  const sanitize = s => (s || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+  // Render
+  function render() {
+    const q = (searchEl.value || '').toLowerCase().trim();
+    const rows = contacts
+      .filter(c =>
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q)
+      )
+      .map(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${sanitize(c.name)}</td>
+          <td>${sanitize(c.phone)}</td>
+          <td>${sanitize(c.email)}</td>
+          <td class="actions">
+            <button data-act="edit" data-id="${c.id}">Edit</button>
+            <button data-act="del" data-id="${c.id}">Delete</button>
+          </td>
+        `;
+        return tr;
+      });
+
+    tbody.replaceChildren(...rows);
+    empty.style.display = contacts.length ? 'none' : 'block';
+  }
+
+  // Add
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const name = nameEl.value.trim();
+    const phone = (phoneEl.value || '').trim();
+    const email = (emailEl.value || '').trim();
+
+    if (!name) { alert('Name is required'); return; }
+
+    contacts.push({ id: uid(), name, phone, email });
+    save();
+    render();
+    form.reset();
+    nameEl.focus();
+  });
+
+  // Table actions
+  tbody.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const act = btn.dataset.act;
+    const idx = contacts.findIndex(c => c.id === id);
+    if (idx < 0) return;
+
+    if (act === 'del') {
+      if (confirm('Delete this contact?')) {
+        contacts.splice(idx, 1);
+        save(); render();
+      }
+    }
+
+    if (act === 'edit') {
+      const c = contacts[idx];
+      const name = prompt('Name:', c.name);
+      if (name === null) return;
+      const phone = prompt('Phone:', c.phone);
+      if (phone === null) return;
+      const email = prompt('Email:', c.email);
+      if (email === null) return;
+
+      const newName = name.trim();
+      if (!newName) { alert('Name cannot be empty'); return; }
+
+      contacts[idx] = { ...c, name: newName, phone: (phone||'').trim(), email: (email||'').trim() };
+      save(); render();
+    }
+  });
+
+  // Search
+  searchEl.addEventListener('input', render);
+
+  // Clear all
+  clearAllBtn.addEventListener('click', () => {
+    if (!contacts.length) return;
+    if (confirm('Remove all contacts?')) {
+      contacts = [];
+      save(); render();
+    }
+  });
+
+  // Init
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
